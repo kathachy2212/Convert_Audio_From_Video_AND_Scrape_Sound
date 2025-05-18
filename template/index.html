@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>YouTube Audio Scraper</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        .transition {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 bg-light">
+    <div class="container">
+        <div class="card shadow-lg p-4 transition">
+            <h2 class="mb-4 text-center">YouTube Video Link to Convert Audio</h2>
+
+            <form id="scrapeForm">
+                <div class="form-group">
+                    <input type="text" class="form-control" name="url" placeholder="Enter YouTube video URL" required>
+                </div>
+                <div class="text-left">
+                    <button type="submit" class="btn btn-primary">Scrape</button>
+                </div>
+            </form>
+
+            <div id="loading" class="mt-4 text-center" style="display: none;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2">Processing... Please wait.</p>
+            </div>
+
+            <div id="result" class="mt-4"></div>
+
+            <div class="d-flex justify-content-center mt-3">
+                <button id="copy-btn" class="btn btn-secondary mr-2" style="display: none;">Copy Info</button>
+                <button id="export-pdf-btn" class="btn btn-info" style="display: none;">Export PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        document.getElementById('scrapeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            const copyBtn = document.getElementById('copy-btn');
+            const pdfBtn = document.getElementById('export-pdf-btn');
+
+            loading.style.display = 'block';
+            result.innerHTML = '';
+            copyBtn.style.display = 'none';
+            pdfBtn.style.display = 'none';
+
+            fetch('/scrape/', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                if (data.error) {
+                    result.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                } else {
+                    result.innerHTML = `
+                        <div class="card mt-4 p-3 shadow-sm">
+                            <h2 id="video-title">${data.title}</h2>
+                            <p id="video-uploader"><strong>Uploader:</strong> ${data.uploader}</p>
+                            <p id="video-date"><strong>Publish Date:</strong> ${data.publish_date}</p>
+                            <p id="video-views"><strong>Views:</strong> ${data.view_count}</p>
+                            <p><strong>Description:</strong> <span id="desc-text">${data.description}</span></p>
+                            <p><strong>Transcript:</strong> <span id="transcript-text">${data.transcript}</span></p>
+                            <h5 class="mt-3">Download Audio:</h5>
+                            <a href="${data.download_link}" class="btn btn-success" download>Download MP3</a>
+                        </div>
+                    `;
+                    copyBtn.style.display = 'inline-block';
+                    pdfBtn.style.display = 'inline-block';
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                result.innerHTML = `<div class="alert alert-danger">Error: ${error}</div>`;
+            });
+        });
+
+        document.getElementById('copy-btn').addEventListener('click', function () {
+            const text = `
+            Title: ${document.getElementById('video-title')?.innerText}
+            Uploader: ${document.getElementById('video-uploader')?.innerText}
+            Date: ${document.getElementById('video-date')?.innerText}
+            Views: ${document.getElementById('video-views')?.innerText}
+            Description: ${document.getElementById('desc-text')?.innerText}
+            Transcript: ${document.getElementById('transcript-text')?.innerText}
+            `;
+            navigator.clipboard.writeText(text);
+            alert('Copied to clipboard!');
+        });
+
+        document.getElementById('export-pdf-btn').addEventListener('click', function () {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            let y = 10;
+
+            function wrapText(label, text) {
+                doc.setFontSize(12);
+                doc.setFont("helvetica", "bold");
+                doc.text(label, 10, y);
+                y += 6;
+                doc.setFont("helvetica", "normal");
+                const lines = doc.splitTextToSize(text, 180);
+                lines.forEach(line => {
+                    doc.text(line, 10, y);
+                    y += 6;
+                });
+                y += 4;
+            }
+
+            wrapText("Title:", document.getElementById('video-title')?.innerText || '');
+            wrapText("Uploader:", document.getElementById('video-uploader')?.innerText || '');
+            wrapText("Date:", document.getElementById('video-date')?.innerText || '');
+            wrapText("Views:", document.getElementById('video-views')?.innerText || '');
+            wrapText("Description:", document.getElementById('desc-text')?.innerText || '');
+            wrapText("Transcript:", document.getElementById('transcript-text')?.innerText || '');
+
+            doc.save("video_metadata.pdf");
+        });
+    </script>
+</body>
+</html>
